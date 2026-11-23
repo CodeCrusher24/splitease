@@ -14,11 +14,9 @@ A full-stack expense manager for friends, roommates and travel groups. Add share
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-[Live Demo](#) · [API Docs](#) · [Report a Bug](../../issues)
+[Getting Started](#getting-started) · [Settlement Algorithm](#the-settlement-algorithm) · [Report a Bug](../../issues)
 
 </div>
-
-<!-- Replace the (#) links above with your deployed frontend and API /docs URLs. -->
 
 ---
 
@@ -50,7 +48,7 @@ A full-stack expense manager for friends, roommates and travel groups. Add share
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
 - [Testing](#testing)
-- [Deployment](#deployment)
+- [Deployment Guide](#deployment-guide)
 - [Known Limitations](#known-limitations)
 - [Roadmap](#roadmap)
 - [License](#license)
@@ -203,7 +201,7 @@ def simplify_debts(net: dict[int, int]) -> list[tuple[int, int, int]]:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/splitease.git
+git clone https://github.com/CodeCrusher24/splitease.git
 cd splitease
 ```
 
@@ -289,7 +287,7 @@ Base path: `/api/v1`. Full interactive documentation is available at `/docs` (Sw
 | GET | `/groups/{id}/balances` | Net balance per member |
 | GET | `/groups/{id}/simplify` | Simplified settlement plan |
 
-> Check `/docs` for the exact, current list of routes; the table above covers the main flow.
+> The table covers the main flow. The full list of routes and schemas is always available in the Swagger UI at `/docs` when the API is running.
 
 ### Add an expense
 
@@ -353,9 +351,9 @@ Invariants verified:
 
 ---
 
-## Deployment
+## Deployment Guide
 
-SplitEase is easy to host on free or low-cost tiers. A typical setup:
+SplitEase is easy to host on free or low-cost tiers. This guide describes a typical setup:
 
 | Component | Suggested platform |
 | :--- | :--- |
@@ -377,14 +375,14 @@ Free-tier limits change, so check each platform's current pricing.
    { "rewrites": [{ "source": "/(.*)", "destination": "/" }] }
    ```
 
-### Production checklist
+### Before going live
 
-- [ ] `SECRET_KEY` is long, random and not the default
-- [ ] `CORS_ORIGINS` lists only your real frontend domain
-- [ ] Auto-reload and debug modes are off
-- [ ] Migrations run on deploy
-- [ ] Database backups are enabled
-- [ ] Logs go to stdout
+- Use a long, random `SECRET_KEY`, never the default.
+- Set `CORS_ORIGINS` to your real frontend domain only.
+- Turn off auto-reload and debug modes.
+- Run migrations on every deploy.
+- Enable database backups with your provider.
+- Send logs to stdout so the platform can collect them.
 
 ---
 

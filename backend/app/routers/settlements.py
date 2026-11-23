@@ -33,7 +33,11 @@ def create_settlement(
     if not recipient:
         raise HTTPException(status_code=400, detail="Recipient is not in this group")
 
-    # 3. Create the settlement record
+    # 3. Prevent paying yourself
+    if payload.to_user == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot pay yourself")
+
+    # 4. Create the settlement record
     amount_minor = int(round(payload.amount * 100))
     settlement = Settlement(
         group_id=group_id,
@@ -44,7 +48,7 @@ def create_settlement(
     db.add(settlement)
     db.flush()
 
-    # 4. Log the activity
+    # 5. Log the activity
     log_activity(
         db=db,
         group_id=group_id,

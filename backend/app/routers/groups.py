@@ -149,6 +149,7 @@ def add_member(
     db.commit()
     
     return {"message": f"Successfully added {new_user.name} to the group"}
+
 @router.delete("/{group_id}/members/{user_id}")
 def remove_member(
     group_id: int,

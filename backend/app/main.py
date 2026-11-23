@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, groups, expenses
+
 from app.core.config import settings
-from app.routers import auth, groups  # <-- Add groups here
+from app.routers import auth, groups, expenses, balances  # <-- Added balances
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -21,10 +21,10 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
-app.include_router(groups.router, prefix=settings.API_V1_PREFIX)  # <-- Register
-app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(groups.router, prefix=settings.API_V1_PREFIX)
 app.include_router(expenses.router, prefix=settings.API_V1_PREFIX)
+app.include_router(balances.router, prefix=settings.API_V1_PREFIX)  # <-- Added this line
+
 @app.get("/health", tags=["meta"])
 def health_check() -> dict[str, str]:
     return {"status": "ok"}

@@ -41,3 +41,14 @@ def test_simplify_settles_everyone(net):
         balance[to] -= amt
         
     assert all(v == 0 for v in balance.values())
+def test_settlements_update_balances_correctly():
+    members = [1, 2]
+    expenses = [] # No expenses
+    settlements = [{"from_user": 1, "to_user": 2, "amount_minor": 1000}]
+    
+    net = calculate_net_balances(members, expenses, settlements)
+    
+    # User 1 paid 1000, so their net should be -1000
+    # User 2 received 1000, so their net should be +1000
+    assert net[1] == -1000
+    assert net[2] == 1000

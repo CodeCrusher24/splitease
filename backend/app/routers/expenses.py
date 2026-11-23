@@ -8,6 +8,7 @@ from app.models.expense import Expense
 from app.models.expense_split import ExpenseSplit
 from app.schemas.expense import ExpenseCreate, ExpenseResponse
 from app.services.splits import split_equal, split_exact, split_percentage, split_shares
+from app.services.activity import log_activity # <-- NEW IMPORT
 
 router = APIRouter(prefix="/groups/{group_id}/expenses", tags=["expenses"])
 
@@ -53,7 +54,7 @@ def add_expense(
         paid_by=payload.paid_by,
         description=payload.description,
         amount_minor=amount_minor,
-        currency="INR", # Hardcoded for now, can come from group later
+        currency="INR", 
         category=payload.category,
         split_type=payload.split_type,
         expense_date=payload.expense_date,
@@ -70,8 +71,20 @@ def add_expense(
         )
         db.add(db_split)
         
+    # 6. Log the activity  <-- NEW BLOCK
+    log_activity(
+        db=db,
+        group_id=group_id,
+        actor_id=current_user.id,
+        action="expense_created",
+        payload={
+            "expense_id": expense.id,
+            "description": expense.description,
+            "amount_minor": expense.amount_minor
+        }
+    )
+        
     db.commit()
     db.refresh(expense)
     
-    # Return the response (FastAPI will serialize the splits relationship)
     return expense

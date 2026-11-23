@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth
+from app.routers import auth, groups  # <-- Add groups here
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -11,7 +11,6 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS
 origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -21,8 +20,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
+app.include_router(groups.router, prefix=settings.API_V1_PREFIX)  # <-- Register
 
 @app.get("/health", tags=["meta"])
 def health_check() -> dict[str, str]:

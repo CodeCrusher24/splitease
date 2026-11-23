@@ -3,8 +3,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import GroupDetail from './pages/GroupDetail'; // <-- NEW
 
-// A wrapper to protect private routes
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
@@ -21,11 +21,12 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route 
             path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
+            element={<ProtectedRoute><Dashboard /></ProtectedRoute>} 
+          />
+          {/* NEW ROUTE */}
+          <Route 
+            path="/groups/:id" 
+            element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} 
           />
         </Routes>
       </BrowserRouter>

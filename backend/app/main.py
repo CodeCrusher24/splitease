@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.routers import auth
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -10,7 +11,7 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS: which browser origins may call this API.
+# CORS
 origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -20,12 +21,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register routers
+app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 
 @app.get("/health", tags=["meta"])
 def health_check() -> dict[str, str]:
-    """Liveness probe. Returns ok if the API process is up."""
     return {"status": "ok"}
-
 
 @app.get("/", tags=["meta"])
 def root() -> dict[str, str]:

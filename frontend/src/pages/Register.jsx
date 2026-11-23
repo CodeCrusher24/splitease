@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 export default function Register() {
   const [name, setName] = useState('');
@@ -15,8 +16,9 @@ export default function Register() {
     setError('');
     try {
       await register(name, email, password);
+      toast.success('Account created! Welcome to SplitEase.');
       navigate('/dashboard');
-        } catch (err) {
+    } catch (err) {
       const errorData = err.response?.data?.detail;
       if (Array.isArray(errorData)) {
         // FastAPI 422 validation errors come as an array
@@ -61,6 +63,7 @@ export default function Register() {
               className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
               value={password} onChange={(e) => setPassword(e.target.value)}
             />
+            <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters.</p>
           </div>
           <button type="submit" className="w-full bg-indigo-600 text-white p-2 rounded-md hover:bg-indigo-700 transition">
             Create Account

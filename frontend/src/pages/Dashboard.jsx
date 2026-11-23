@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import apiClient from '../api/client';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -37,7 +38,6 @@ export default function Dashboard() {
         description: newGroupDesc,
         currency: 'INR'
       });
-      // Add the new group to the list
       setGroups([...groups, response.data]);
       setShowCreate(false);
       setNewGroupName('');
@@ -47,7 +47,7 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Loading groups...</div>;
+  if (loading) return <div className="min-h-screen p-8"><LoadingSpinner /></div>;
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">

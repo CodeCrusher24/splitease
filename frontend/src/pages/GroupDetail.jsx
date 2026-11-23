@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../api/client';
+import toast from 'react-hot-toast';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -13,13 +15,13 @@ export default function GroupDetail() {
   const [expenses, setExpenses] = useState([]);
   const [balances, setBalances] = useState({});
   const [payments, setPayments] = useState([]);
-  const [activities, setActivities] = useState([]); // <-- NEW
+  const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // UI state
   const [showModal, setShowModal] = useState(false);
-  const [settlingId, setSettlingId] = useState(null); // Prevents double-clicks
+  const [settlingId, setSettlingId] = useState(null);
 
   // Form state (Add Expense)
   const [description, setDescription] = useState('');
@@ -45,14 +47,14 @@ export default function GroupDetail() {
         apiClient.get(`/groups/${id}/expenses`),
         apiClient.get(`/groups/${id}/balances`),
         apiClient.get(`/groups/${id}/simplify`),
-        apiClient.get(`/groups/${id}/activity`) // <-- NEW
+        apiClient.get(`/groups/${id}/activity`)
       ]);
       
       setGroup(groupRes.data);
       setExpenses(expensesRes.data);
       setBalances(balancesRes.data.balances);
       setPayments(simplifyRes.data.payments);
-      setActivities(activityRes.data); // <-- NEW
+      setActivities(activityRes.data);
       
       if (groupRes.data.members.length > 0) {
         const firstUserId = groupRes.data.members[0].user_id;
@@ -92,6 +94,7 @@ export default function GroupDetail() {
       };
 
       await apiClient.post(`/groups/${id}/expenses`, payload);
+      toast.success('Expense added successfully!');
       await fetchGroupData();
       
       setShowModal(false);
@@ -105,9 +108,9 @@ export default function GroupDetail() {
     } catch (err) {
       const detail = err.response?.data?.detail;
       if (Array.isArray(detail)) {
-        setError(detail[0].msg || 'Validation error');
+        toast.error(detail[0].msg || 'Validation error');
       } else {
-        setError(detail || 'Failed to add expense');
+        toast.error(detail || 'Failed to add expense');
       }
     }
   };
@@ -119,9 +122,10 @@ export default function GroupDetail() {
         to_user: toUserId,
         amount: amountMinor / 100
       });
+      toast.success('Settlement recorded!');
       await fetchGroupData();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to record settlement');
+      toast.error(err.response?.data?.detail || 'Failed to record settlement');
     } finally {
       setSettlingId(null);
     }
@@ -135,6 +139,7 @@ export default function GroupDetail() {
     try {
       await apiClient.post(`/groups/${id}/members`, { email: inviteEmail });
       setInviteSuccess(`${inviteEmail} added to the group!`);
+      toast.success('Member added successfully!');
       setInviteEmail('');
       await fetchGroupData();
     } catch (err) {
@@ -146,9 +151,10 @@ export default function GroupDetail() {
     if (!window.confirm("Are you sure you want to remove this member?")) return;
     try {
       await apiClient.delete(`/groups/${id}/members/${userId}`);
+      toast.success('Member removed');
       await fetchGroupData();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to remove member');
+      toast.error(err.response?.data?.detail || 'Failed to remove member');
     }
   };
 
@@ -161,7 +167,7 @@ export default function GroupDetail() {
     return member ? member.name : `User ${userId}`;
   };
 
-  if (loading) return <div className="p-8 text-center text-gray-500">Loading group...</div>;
+  if (loading) return <div className="min-h-screen p-8"><LoadingSpinner /></div>;
   if (error && !group) return <div className="p-8 text-center text-red-500">{error}</div>;
   if (!group) return null;
 
@@ -358,8 +364,6 @@ export default function GroupDetail() {
               <h2 className="text-2xl font-bold text-gray-800">Add an Expense</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
             </div>
-
-            {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">{error}</div>}
 
             <form onSubmit={handleAddExpense} className="space-y-4">
               <div>

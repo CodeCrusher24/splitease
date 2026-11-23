@@ -9,18 +9,25 @@ export default function GroupDetail() {
   // Data state
   const [group, setGroup] = useState(null);
   const [expenses, setExpenses] = useState([]);
+  const [balances, setBalances] = useState({});
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // UI state
   const [showModal, setShowModal] = useState(false);
 
-  // Form state
+  // Form state (Add Expense)
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [paidBy, setPaidBy] = useState('');
   const [splitType, setSplitType] = useState('equal');
-  const [splits, setSplits] = useState({}); // { userId: value }
+  const [splits, setSplits] = useState({});
+
+  // Form state (Invite Member)
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteError, setInviteError] = useState('');
+  const [inviteSuccess, setInviteSuccess] = useState('');
 
   useEffect(() => {
     fetchGroupData();
@@ -29,14 +36,18 @@ export default function GroupDetail() {
   const fetchGroupData = async () => {
     try {
       setLoading(true);
-      const [groupRes, expensesRes] = await Promise.all([
+      const [groupRes, expensesRes, balancesRes, simplifyRes] = await Promise.all([
         apiClient.get(`/groups/${id}`),
-        apiClient.get(`/groups/${id}/expenses`)
+        apiClient.get(`/groups/${id}/expenses`),
+        apiClient.get(`/groups/${id}/balances`),
+        apiClient.get(`/groups/${id}/simplify`)
       ]);
+      
       setGroup(groupRes.data);
       setExpenses(expensesRes.data);
+      setBalances(balancesRes.data.balances);
+      setPayments(simplifyRes.data.payments);
       
-      // Initialize the paidBy and splits state with the first member
       if (groupRes.data.members.length > 0) {
         const firstUserId = groupRes.data.members[0].user_id;
         setPaidBy(firstUserId.toString());
@@ -59,7 +70,6 @@ export default function GroupDetail() {
     setError('');
 
     try {
-      // Format splits for the API based on splitType
       const formattedSplits = Object.keys(splits).map(userId => ({
         user_id: parseInt(userId),
         value: parseFloat(splits[userId]) || 0
@@ -75,13 +85,12 @@ export default function GroupDetail() {
         splits: formattedSplits
       };
 
-      const response = await apiClient.post(`/groups/${id}/expenses`, payload);
+      await apiClient.post(`/groups/${id}/expenses`, payload);
       
-      // Add to local state and close modal
-      setExpenses([response.data, ...expenses]);
+      // Refresh the data to get updated balances
+      await fetchGroupData();
+      
       setShowModal(false);
-      
-      // Reset form
       setDescription('');
       setAmount('');
       setSplitType('equal');
@@ -90,7 +99,6 @@ export default function GroupDetail() {
       setSplits(resetSplits);
 
     } catch (err) {
-      // Handle validation errors from FastAPI
       const detail = err.response?.data?.detail;
       if (Array.isArray(detail)) {
         setError(detail[0].msg || 'Validation error');
@@ -100,8 +108,42 @@ export default function GroupDetail() {
     }
   };
 
+  const handleSettleUp = async (fromUserId, toUserId, amountMinor) => {
+    try {
+      await apiClient.post(`/groups/${id}/settlements`, {
+        to_user: toUserId,
+        amount: amountMinor / 100
+      });
+      await fetchGroupData();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to record settlement');
+    }
+  };
+
+  const handleInviteMember = async (e) => {
+    e.preventDefault();
+    setInviteError('');
+    setInviteSuccess('');
+    
+    try {
+      await apiClient.post(`/groups/${id}/members`, { email: inviteEmail });
+      setInviteSuccess(`${inviteEmail} added to the group!`);
+      setInviteEmail('');
+      // Refresh group data to show the new member
+      await fetchGroupData();
+    } catch (err) {
+      setInviteError(err.response?.data?.detail || 'Failed to add member. Make sure they are registered.');
+    }
+  };
+
   const handleSplitChange = (userId, value) => {
     setSplits({ ...splits, [userId]: value });
+  };
+
+  // Helper to get member name from ID
+  const getMemberName = (userId) => {
+    const member = group?.members.find(m => m.user_id === userId);
+    return member ? member.name : `User ${userId}`;
   };
 
   if (loading) return <div className="p-8 text-center text-gray-500">Loading group...</div>;
@@ -110,7 +152,7 @@ export default function GroupDetail() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <button onClick={() => navigate('/dashboard')} className="text-indigo-600 mb-4 hover:underline font-medium">
           &larr; Back to Dashboard
         </button>
@@ -120,6 +162,7 @@ export default function GroupDetail() {
           <div>
             <h1 className="text-3xl font-bold text-gray-800">{group.name}</h1>
             <p className="text-gray-600">{group.description || 'No description'}</p>
+            
             <div className="mt-4 flex flex-wrap gap-2">
               {group.members.map((m) => (
                 <span key={m.user_id} className="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded">
@@ -127,7 +170,31 @@ export default function GroupDetail() {
                 </span>
               ))}
             </div>
+
+            {/* Invite Member Form */}
+            <div className="mt-6 border-t pt-4 max-w-md">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">Invite a Member</h3>
+              {inviteError && <div className="text-red-500 text-xs mb-2">{inviteError}</div>}
+              {inviteSuccess && <div className="text-green-500 text-xs mb-2">{inviteSuccess}</div>}
+              <form onSubmit={handleInviteMember} className="flex gap-2">
+                <input 
+                  type="email" 
+                  required
+                  placeholder="friend@example.com"
+                  className="flex-1 border border-gray-300 rounded-md p-2 text-sm"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+                <button type="submit" className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-900 text-sm">
+                  Add
+                </button>
+              </form>
+              <p className="text-xs text-gray-500 mt-2">
+                * The user must have an account registered on SplitEase to be added.
+              </p>
+            </div>
           </div>
+
           <button 
             onClick={() => setShowModal(true)}
             className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
@@ -136,9 +203,10 @@ export default function GroupDetail() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Expenses List */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Expenses List (Takes 2 columns) */}
+          <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-bold mb-4 border-b pb-2">Expenses</h2>
             {expenses.length === 0 ? (
               <p className="text-gray-500 italic">No expenses yet. Add one above.</p>
@@ -149,7 +217,7 @@ export default function GroupDetail() {
                     <div>
                       <p className="font-semibold text-gray-800">{exp.description}</p>
                       <p className="text-xs text-gray-500">
-                        Paid by User {exp.paid_by} • {exp.split_type}
+                        Paid by {getMemberName(exp.paid_by)} • {exp.split_type}
                       </p>
                     </div>
                     <div className="text-right">
@@ -161,10 +229,53 @@ export default function GroupDetail() {
             )}
           </div>
 
-          {/* Balances (Placeholder for next phase) */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-bold mb-4 border-b pb-2">Balances & Settlements</h2>
-            <p className="text-gray-500 italic">Balances will be calculated here soon.</p>
+          {/* Balances & Settlements (Takes 1 column) */}
+          <div className="space-y-6">
+            {/* Balances */}
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <h2 className="text-lg font-bold mb-4 border-b pb-2">Net Balances</h2>
+              <ul className="space-y-2">
+                {Object.entries(balances).map(([userId, amount]) => {
+                  const amt = amount / 100;
+                  if (amt === 0) return null;
+                  return (
+                    <li key={userId} className="flex justify-between text-sm">
+                      <span className="text-gray-700">{getMemberName(parseInt(userId))}</span>
+                      <span className={amt > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                        {amt > 0 ? `is owed ₹${amt.toFixed(2)}` : `owes ₹${Math.abs(amt).toFixed(2)}`}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            {/* Settlements */}
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <h2 className="text-lg font-bold mb-4 border-b pb-2">Settle Up</h2>
+              {payments.length === 0 ? (
+                <p className="text-gray-500 italic text-sm">Everyone is settled up!</p>
+              ) : (
+                <ul className="space-y-3">
+                  {payments.map((p, idx) => (
+                    <li key={idx} className="bg-gray-50 p-3 rounded border text-sm flex flex-col gap-2">
+                      <div className="text-gray-700">
+                        <span className="font-semibold">{getMemberName(p.from_user)}</span> pays <span className="font-semibold">{getMemberName(p.to_user)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-indigo-600">₹{(p.amount_minor / 100).toFixed(2)}</span>
+                        <button 
+                          onClick={() => handleSettleUp(p.from_user, p.to_user, p.amount_minor)}
+                          className="bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 text-xs font-semibold"
+                        >
+                          Mark as Paid
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -181,7 +292,6 @@ export default function GroupDetail() {
             {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">{error}</div>}
 
             <form onSubmit={handleAddExpense} className="space-y-4">
-              {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700">Description</label>
                 <input 
@@ -191,7 +301,6 @@ export default function GroupDetail() {
                 />
               </div>
 
-              {/* Amount & Payer */}
               <div className="flex gap-4">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700">Amount (₹)</label>
@@ -214,7 +323,6 @@ export default function GroupDetail() {
                 </div>
               </div>
 
-              {/* Split Type */}
               <div>
                 <label className="block text-sm font-medium text-gray-700">Split Type</label>
                 <select 
@@ -228,7 +336,6 @@ export default function GroupDetail() {
                 </select>
               </div>
 
-              {/* Dynamic Split Inputs */}
               {splitType !== 'equal' && (
                 <div className="space-y-2 border-t pt-4 mt-4">
                   <label className="block text-sm font-medium text-gray-700">

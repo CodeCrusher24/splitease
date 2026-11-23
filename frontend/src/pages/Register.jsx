@@ -14,16 +14,26 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    
     try {
       await register(name, email, password);
       toast.success('Account created! Welcome to SplitEase.');
       navigate('/dashboard');
     } catch (err) {
       const errorData = err.response?.data?.detail;
+      
       if (Array.isArray(errorData)) {
-        // FastAPI 422 validation errors come as an array
-        setError(errorData[0].msg || 'Invalid input');
+        // FastAPI 422 validation errors come as an array of objects
+        const firstError = errorData[0];
+        
+        // Check if the error is specifically about the password length
+        if (firstError.loc && firstError.loc.includes('password')) {
+          setError('Password must be at least 6 characters long.');
+        } else {
+          setError(firstError.msg || 'Invalid input');
+        }
       } else {
+        // Handles string errors (like "Email already registered")
         setError(errorData || 'Registration failed');
       }
     }

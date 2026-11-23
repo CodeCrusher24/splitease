@@ -35,6 +35,10 @@ export default function GroupDetail() {
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
 
+  // Form state (Remove Member)
+  const [memberToRemoveId, setMemberToRemoveId] = useState('');
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+
   useEffect(() => {
     fetchGroupData();
   }, [id]);
@@ -147,11 +151,13 @@ export default function GroupDetail() {
     }
   };
 
-  const handleRemoveMember = async (userId) => {
-    if (!window.confirm("Are you sure you want to remove this member?")) return;
+  const handleRemoveMember = async () => {
+    if (!memberToRemoveId) return;
     try {
-      await apiClient.delete(`/groups/${id}/members/${userId}`);
+      await apiClient.delete(`/groups/${id}/members/${memberToRemoveId}`);
       toast.success('Member removed');
+      setShowRemoveConfirm(false);
+      setMemberToRemoveId('');
       await fetchGroupData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to remove member');
@@ -171,6 +177,10 @@ export default function GroupDetail() {
   if (error && !group) return <div className="p-8 text-center text-red-500">{error}</div>;
   if (!group) return null;
 
+  // Only the creator can remove members, and they can't remove themselves
+  const isCreator = user.id === group.created_by;
+  const removableMembers = group.members.filter(m => m.user_id !== group.created_by);
+
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-5xl mx-auto">
@@ -186,17 +196,8 @@ export default function GroupDetail() {
             
             <div className="mt-4 flex flex-wrap gap-2">
               {group.members.map((m) => (
-                <div key={m.user_id} className="flex items-center bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded">
+                <div key={m.user_id} className="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded">
                   {m.name}
-                  {user.id === group.created_by && m.user_id !== user.id && (
-                    <button 
-                      onClick={() => handleRemoveMember(m.user_id)}
-                      className="ml-2 text-red-500 hover:text-red-700 font-bold"
-                      title="Remove member"
-                    >
-                      &times;
-                    </button>
-                  )}
                 </div>
               ))}
             </div>
@@ -223,6 +224,33 @@ export default function GroupDetail() {
                 * The user must have an account registered on SplitEase to be added.
               </p>
             </div>
+
+            {/* Remove Member Form (Only for creator) */}
+            {isCreator && removableMembers.length > 0 && (
+              <div className="mt-4 pt-4 border-t max-w-md">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Remove a Member</h3>
+                <div className="flex gap-2">
+                  <select 
+                    className="flex-1 border border-gray-300 rounded-md p-2 text-sm"
+                    value={memberToRemoveId}
+                    onChange={(e) => setMemberToRemoveId(e.target.value)}
+                  >
+                    <option value="">Select a member...</option>
+                    {removableMembers.map(m => (
+                      <option key={m.user_id} value={m.user_id}>{m.name}</option>
+                    ))}
+                  </select>
+                  <button 
+                    type="button"
+                    disabled={!memberToRemoveId}
+                    onClick={() => setShowRemoveConfirm(true)}
+                    className="bg-red-100 text-red-600 px-4 py-2 rounded hover:bg-red-200 text-sm font-medium disabled:opacity-50 transition"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <button 
@@ -331,8 +359,15 @@ export default function GroupDetail() {
               {activities.map((act) => (
                 <li key={act.id} className="flex gap-3 text-sm border-b pb-2 last:border-0">
                   <div className="w-32 text-gray-500 shrink-0">
-                    {new Date(act.created_at).toLocaleDateString()} <br/>
-                    <span className="text-xs">{new Date(act.created_at).toLocaleTimeString()}</span>
+                    {/* TIMEZONE FIX: Append 'Z' to treat as UTC, then toLocale formats to local time */}
+                    {new Date(act.created_at + 'Z').toLocaleDateString(undefined, { 
+                      day: 'numeric', month: 'short' 
+                    })} <br/>
+                    <span className="text-xs">
+                      {new Date(act.created_at + 'Z').toLocaleTimeString([], { 
+                        hour: '2-digit', minute: '2-digit' 
+                      })}
+                    </span>
                   </div>
                   <div>
                     {act.action === 'expense_created' && (
@@ -438,6 +473,33 @@ export default function GroupDetail() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Member Confirmation Modal */}
+      {showRemoveConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Remove Member?</h3>
+            <p className="text-gray-600 text-sm mb-6">
+              Are you sure you want to remove <strong>{getMemberName(parseInt(memberToRemoveId))}</strong> from this group? 
+              Their past expenses will remain, but they won't be able to add new ones.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowRemoveConfirm(false)} 
+                className="px-4 py-2 text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleRemoveMember} 
+                className="px-4 py-2 text-white bg-red-600 rounded hover:bg-red-700 transition"
+              >
+                Yes, Remove
+              </button>
+            </div>
           </div>
         </div>
       )}

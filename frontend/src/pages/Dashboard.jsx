@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 export default function Dashboard() {
   const { user } = useAuth();
   const [groups, setGroups] = useState([]);
+  const [stats, setStats] = useState({ total_groups: 0, total_expenses_minor: 0, pending_settlements_minor: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -18,15 +19,20 @@ export default function Dashboard() {
   const [newGroupDesc, setNewGroupDesc] = useState('');
 
   useEffect(() => {
-    fetchGroups();
+    fetchData();
   }, []);
 
-  const fetchGroups = async () => {
+  const fetchData = async () => {
     try {
-      const response = await apiClient.get('/groups');
-      setGroups(response.data);
+      setLoading(true);
+      const [groupsRes, statsRes] = await Promise.all([
+        apiClient.get('/groups'),
+        apiClient.get('/users/me/stats')
+      ]);
+      setGroups(groupsRes.data);
+      setStats(statsRes.data);
     } catch (err) {
-      setError('Failed to load groups. Please try again.');
+      setError('Failed to load data.');
     } finally {
       setLoading(false);
     }
@@ -35,36 +41,45 @@ export default function Dashboard() {
   const handleCreateGroup = async (e) => {
     e.preventDefault();
     try {
-      const response = await apiClient.post('/groups', {
+      await apiClient.post('/groups', {
         name: newGroupName,
         description: newGroupDesc,
         currency: 'INR'
       });
-      setGroups([response.data, ...groups]);
+      toast.success('Group created!');
       setShowCreate(false);
       setNewGroupName('');
       setNewGroupDesc('');
-      toast.success('Group created!');
+      fetchData(); // Refresh stats and groups
     } catch (err) {
       toast.error('Failed to create group.');
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Navbar />
-        <div className="flex-1"><LoadingSpinner /></div>
-        <Footer />
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen flex flex-col bg-gray-50"><Navbar /><div className="flex-1"><LoadingSpinner /></div><Footer /></div>;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-10">
+        
+        {/* Stats Bar */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <span className="text-sm font-medium text-gray-500 mb-1">Total Groups</span>
+            <div className="text-3xl font-bold text-gray-900">{stats.total_groups}</div>
+          </div>
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <span className="text-sm font-medium text-gray-500 mb-1">Total Paid</span>
+            <div className="text-3xl font-bold text-gray-900">₹{(stats.total_expenses_minor / 100).toFixed(2)}</div>
+          </div>
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <span className="text-sm font-medium text-gray-500 mb-1">Pending Settlements</span>
+            <div className="text-3xl font-bold text-indigo-600">₹{(stats.pending_settlements_minor / 100).toFixed(2)}</div>
+          </div>
+        </div>
+
         <div className="flex justify-between items-end mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Your Groups</h1>
@@ -111,7 +126,7 @@ export default function Dashboard() {
           <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
             <div className="text-4xl mb-4">🏝️</div>
             <h3 className="text-lg font-medium text-gray-900">No groups yet</h3>
-            <p className="text-gray-500 mt-1 max-w-sm mx-auto">Create a group to start tracking shared expenses with friends, roommates, or travel buddies.</p>
+            <p className="text-gray-500 mt-1 max-w-sm mx-auto">Create a group to start tracking shared expenses.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -126,8 +141,9 @@ export default function Dashboard() {
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{group.name}</h3>
                   <p className="text-sm text-gray-500 mt-1 flex-grow">{group.description || 'No description provided.'}</p>
-                  <div className="mt-6 flex items-center text-sm font-medium text-indigo-600">
-                    View Group <span className="ml-1 group-hover:translate-x-1 transition-transform">&rarr;</span>
+                  <div className="mt-6 flex items-center justify-between text-sm font-medium text-indigo-600">
+                    <span>View Group &rarr;</span>
+                    <span className="text-gray-400 text-xs">Members: {group.member_count}</span>
                   </div>
                 </div>
               </Link>
@@ -135,7 +151,6 @@ export default function Dashboard() {
           </div>
         )}
       </main>
-
       <Footer />
     </div>
   );

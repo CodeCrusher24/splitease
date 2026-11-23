@@ -25,6 +25,7 @@ class GroupResponse(BaseModel):
     created_by: int
     created_at: datetime
     archived: bool
+    member_count: int = 0
 
     model_config = {"from_attributes": True}
 

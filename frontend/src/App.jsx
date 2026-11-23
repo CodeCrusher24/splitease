@@ -3,7 +3,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import GroupDetail from './pages/GroupDetail'; // <-- NEW
+import GroupDetail from './pages/GroupDetail';
+import NotFound from './pages/NotFound';
+import Privacy from './pages/Privacy';
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
@@ -19,15 +21,18 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route 
             path="/dashboard" 
             element={<ProtectedRoute><Dashboard /></ProtectedRoute>} 
           />
-          {/* NEW ROUTE */}
           <Route 
             path="/groups/:id" 
             element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} 
           />
+          
+          {/* Catch-all route for 404s */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

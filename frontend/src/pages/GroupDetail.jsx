@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import apiClient from '../api/client';
 
 export default function GroupDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   // Data state
   const [group, setGroup] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [balances, setBalances] = useState({});
   const [payments, setPayments] = useState([]);
+  const [activities, setActivities] = useState([]); // <-- NEW
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // UI state
   const [showModal, setShowModal] = useState(false);
+  const [settlingId, setSettlingId] = useState(null); // Prevents double-clicks
 
   // Form state (Add Expense)
   const [description, setDescription] = useState('');
@@ -36,17 +40,19 @@ export default function GroupDetail() {
   const fetchGroupData = async () => {
     try {
       setLoading(true);
-      const [groupRes, expensesRes, balancesRes, simplifyRes] = await Promise.all([
+      const [groupRes, expensesRes, balancesRes, simplifyRes, activityRes] = await Promise.all([
         apiClient.get(`/groups/${id}`),
         apiClient.get(`/groups/${id}/expenses`),
         apiClient.get(`/groups/${id}/balances`),
-        apiClient.get(`/groups/${id}/simplify`)
+        apiClient.get(`/groups/${id}/simplify`),
+        apiClient.get(`/groups/${id}/activity`) // <-- NEW
       ]);
       
       setGroup(groupRes.data);
       setExpenses(expensesRes.data);
       setBalances(balancesRes.data.balances);
       setPayments(simplifyRes.data.payments);
+      setActivities(activityRes.data); // <-- NEW
       
       if (groupRes.data.members.length > 0) {
         const firstUserId = groupRes.data.members[0].user_id;
@@ -86,8 +92,6 @@ export default function GroupDetail() {
       };
 
       await apiClient.post(`/groups/${id}/expenses`, payload);
-      
-      // Refresh the data to get updated balances
       await fetchGroupData();
       
       setShowModal(false);
@@ -109,6 +113,7 @@ export default function GroupDetail() {
   };
 
   const handleSettleUp = async (fromUserId, toUserId, amountMinor) => {
+    setSettlingId(`${fromUserId}-${toUserId}`);
     try {
       await apiClient.post(`/groups/${id}/settlements`, {
         to_user: toUserId,
@@ -117,6 +122,8 @@ export default function GroupDetail() {
       await fetchGroupData();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to record settlement');
+    } finally {
+      setSettlingId(null);
     }
   };
 
@@ -129,10 +136,19 @@ export default function GroupDetail() {
       await apiClient.post(`/groups/${id}/members`, { email: inviteEmail });
       setInviteSuccess(`${inviteEmail} added to the group!`);
       setInviteEmail('');
-      // Refresh group data to show the new member
       await fetchGroupData();
     } catch (err) {
-      setInviteError(err.response?.data?.detail || 'Failed to add member. Make sure they are registered.');
+      setInviteError(err.response?.data?.detail || 'Failed to add member.');
+    }
+  };
+
+  const handleRemoveMember = async (userId) => {
+    if (!window.confirm("Are you sure you want to remove this member?")) return;
+    try {
+      await apiClient.delete(`/groups/${id}/members/${userId}`);
+      await fetchGroupData();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to remove member');
     }
   };
 
@@ -140,7 +156,6 @@ export default function GroupDetail() {
     setSplits({ ...splits, [userId]: value });
   };
 
-  // Helper to get member name from ID
   const getMemberName = (userId) => {
     const member = group?.members.find(m => m.user_id === userId);
     return member ? member.name : `User ${userId}`;
@@ -165,9 +180,18 @@ export default function GroupDetail() {
             
             <div className="mt-4 flex flex-wrap gap-2">
               {group.members.map((m) => (
-                <span key={m.user_id} className="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded">
+                <div key={m.user_id} className="flex items-center bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded">
                   {m.name}
-                </span>
+                  {user.id === group.created_by && m.user_id !== user.id && (
+                    <button 
+                      onClick={() => handleRemoveMember(m.user_id)}
+                      className="ml-2 text-red-500 hover:text-red-700 font-bold"
+                      title="Remove member"
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
 
@@ -205,7 +229,7 @@ export default function GroupDetail() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Expenses List (Takes 2 columns) */}
+          {/* Expenses List */}
           <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-bold mb-4 border-b pb-2">Expenses</h2>
             {expenses.length === 0 ? (
@@ -229,7 +253,7 @@ export default function GroupDetail() {
             )}
           </div>
 
-          {/* Balances & Settlements (Takes 1 column) */}
+          {/* Balances & Settlements */}
           <div className="space-y-6">
             {/* Balances */}
             <div className="bg-white p-6 rounded-lg shadow-md">
@@ -264,12 +288,24 @@ export default function GroupDetail() {
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-indigo-600">₹{(p.amount_minor / 100).toFixed(2)}</span>
-                        <button 
-                          onClick={() => handleSettleUp(p.from_user, p.to_user, p.amount_minor)}
-                          className="bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 text-xs font-semibold"
-                        >
-                          Mark as Paid
-                        </button>
+                        
+                        {p.from_user === user.id ? (
+                          <button 
+                            onClick={() => handleSettleUp(p.from_user, p.to_user, p.amount_minor)}
+                            disabled={settlingId === `${p.from_user}-${p.to_user}`}
+                            className={`px-3 py-1 rounded text-xs font-semibold transition ${
+                              settlingId === `${p.from_user}-${p.to_user}`
+                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                : 'bg-green-100 text-green-700 hover:bg-green-200'
+                            }`}
+                          >
+                            {settlingId === `${p.from_user}-${p.to_user}` ? 'Processing...' : 'Mark as Paid'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">
+                            Awaiting payment
+                          </span>
+                        )}
                       </div>
                     </li>
                   ))}
@@ -277,6 +313,40 @@ export default function GroupDetail() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Activity Feed */}
+        <div className="mt-6 bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-xl font-bold mb-4 border-b pb-2">Activity History</h2>
+          {activities.length === 0 ? (
+            <p className="text-gray-500 italic text-sm">No activity yet.</p>
+          ) : (
+            <ul className="space-y-4">
+              {activities.map((act) => (
+                <li key={act.id} className="flex gap-3 text-sm border-b pb-2 last:border-0">
+                  <div className="w-32 text-gray-500 shrink-0">
+                    {new Date(act.created_at).toLocaleDateString()} <br/>
+                    <span className="text-xs">{new Date(act.created_at).toLocaleTimeString()}</span>
+                  </div>
+                  <div>
+                    {act.action === 'expense_created' && (
+                      <span>
+                        <span className="font-semibold">{getMemberName(act.actor_id)}</span> added an expense: 
+                        <span className="italic"> "{act.payload.description}"</span> for ₹{(act.payload.amount_minor / 100).toFixed(2)}
+                      </span>
+                    )}
+                    {act.action === 'settlement_created' && (
+                      <span>
+                        <span className="font-semibold">{getMemberName(act.actor_id)}</span> paid 
+                        <span className="font-semibold"> {getMemberName(act.payload.to_user)}</span> 
+                        ₹{(act.payload.amount_minor / 100).toFixed(2)} to settle up.
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 

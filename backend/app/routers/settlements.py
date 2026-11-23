@@ -1,5 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
+from datetime import datetime, timedelta
+
 from app.core.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.group_member import GroupMember
@@ -37,8 +40,26 @@ def create_settlement(
     if payload.to_user == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot pay yourself")
 
-    # 4. Create the settlement record
     amount_minor = int(round(payload.amount * 100))
+
+    # 4. Prevent double-clicks (duplicate settlement within 5 seconds)
+    recent_settlement = db.query(Settlement).filter(
+        and_(
+            Settlement.group_id == group_id,
+            Settlement.from_user == current_user.id,
+            Settlement.to_user == payload.to_user,
+            Settlement.amount_minor == amount_minor,
+            Settlement.created_at >= datetime.utcnow() - timedelta(seconds=5)
+        )
+    ).first()
+
+    if recent_settlement:
+        raise HTTPException(
+            status_code=400, 
+            detail="Duplicate settlement detected. Please wait a moment."
+        )
+
+    # 5. Create the settlement record
     settlement = Settlement(
         group_id=group_id,
         from_user=current_user.id,
@@ -48,7 +69,7 @@ def create_settlement(
     db.add(settlement)
     db.flush()
 
-    # 5. Log the activity
+    # 6. Log the activity
     log_activity(
         db=db,
         group_id=group_id,

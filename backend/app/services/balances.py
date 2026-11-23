@@ -20,10 +20,10 @@ def calculate_net_balances(
         for split in exp["splits"]:
             net[split["user_id"]] -= split["share_minor"]
 
-        # 2. Add settlements received, subtract settlements paid
+    # 2. Apply settlements: payer's debt decreases, receiver's credit decreases
     for st in settlements:
-        net[st["from_user"]] -= st["amount_minor"]  # Was +=
-        net[st["to_user"]] += st["amount_minor"]    # Was -=
+        net[st["from_user"]] += st["amount_minor"]  # Debt reduced (closer to 0)
+        net[st["to_user"]] -= st["amount_minor"]    # Credit reduced (closer to 0)
 
     # Invariant check: nets must sum to zero
     assert sum(net.values()) == 0, "Net balances do not sum to zero!"

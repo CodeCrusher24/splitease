@@ -8,15 +8,24 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // On app load, check if we have a token
-    const token = localStorage.getItem('token');
-    if (token) {
-      // We need a /users/me endpoint to get the current user. 
-      // For now, we'll just set a dummy user since we haven't built that endpoint yet.
-      // Actually, we can decode the JWT payload to get the user ID, but it's better to fetch it.
-      setUser({ id: 1, name: 'Test User', email: 'test@example.com' }); 
-    }
-    setLoading(false);
+    const fetchUser = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const response = await apiClient.get('/auth/me');
+        setUser(response.data);
+      } catch (err) {
+        // Token is invalid or expired
+        localStorage.removeItem('token');
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUser();
   }, []);
 
   const login = async (email, password) => {
@@ -30,7 +39,6 @@ export function AuthProvider({ children }) {
 
   const register = async (name, email, password) => {
     await apiClient.post('/auth/register', { name, email, password });
-    // After register, log them in automatically
     return login(email, password);
   };
 

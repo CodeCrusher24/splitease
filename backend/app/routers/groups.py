@@ -8,6 +8,7 @@ from app.schemas.group import (
     GroupCreate, GroupResponse, GroupDetailResponse, 
     MemberAdd, GroupMemberResponse
 )
+from app.services.activity import log_activity
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
@@ -15,9 +16,8 @@ router = APIRouter(prefix="/groups", tags=["groups"])
 def create_group(
     payload: GroupCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),  # <--- PROTECTED!
+    current_user: User = Depends(get_current_user),
 ):
-    # 1. Create the group
     group = Group(
         name=payload.name,
         description=payload.description,
@@ -25,19 +25,26 @@ def create_group(
         created_by=current_user.id,
     )
     db.add(group)
-    db.flush()  # Flushes to DB so group.id is generated, but doesn't commit yet
+    db.flush()
     
-    # 2. Automatically add the creator as an Admin member
     member = GroupMember(
         group_id=group.id,
         user_id=current_user.id,
         role="admin"
     )
     db.add(member)
+    
+    log_activity(
+        db=db,
+        group_id=group.id,
+        actor_id=current_user.id,
+        action="group_created",
+        payload={"name": group.name}
+    )
+    
     db.commit()
     db.refresh(group)
     
-    # 3. Build the response
     return GroupDetailResponse(
         id=group.id,
         name=group.name,
@@ -59,7 +66,6 @@ def list_my_groups(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Query groups where the current user is a member
     groups = (
         db.query(Group)
         .join(GroupMember)
@@ -74,7 +80,6 @@ def get_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1. Verify group exists and user is a member
     group = db.query(Group).filter(Group.id == group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -87,7 +92,6 @@ def get_group(
     if not is_member:
         raise HTTPException(status_code=403, detail="Not a member of this group")
         
-    # 2. Fetch all members with their user details
     members = (
         db.query(GroupMember)
         .join(User)
@@ -115,15 +119,14 @@ def add_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1. Verify current user is an admin of this group
-    admin_check = db.query(GroupMember).filter(
+    # 1. Verify current user is a member of the group
+    member_check = db.query(GroupMember).filter(
         GroupMember.group_id == group_id,
-        GroupMember.user_id == current_user.id,
-        GroupMember.role == "admin"
+        GroupMember.user_id == current_user.id
     ).first()
     
-    if not admin_check:
-        raise HTTPException(status_code=403, detail="Only admins can add members")
+    if not member_check:
+        raise HTTPException(status_code=403, detail="Only group members can add people")
         
     # 2. Find the user to add by email
     new_user = db.query(User).filter(User.email == payload.email).first()
@@ -143,9 +146,18 @@ def add_member(
     new_member = GroupMember(
         group_id=group_id,
         user_id=new_user.id,
-        role="member"  # New people are regular members
+        role="member"
     )
     db.add(new_member)
+    
+    log_activity(
+        db=db,
+        group_id=group_id,
+        actor_id=current_user.id,
+        action="member_added",
+        payload={"new_user_id": new_user.id, "new_user_name": new_user.name}
+    )
+    
     db.commit()
     
     return {"message": f"Successfully added {new_user.name} to the group"}
@@ -157,7 +169,7 @@ def remove_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1. Check if current user is admin
+    # Only admins can remove members
     admin_check = db.query(GroupMember).filter(
         GroupMember.group_id == group_id,
         GroupMember.user_id == current_user.id,
@@ -167,11 +179,9 @@ def remove_member(
     if not admin_check:
         raise HTTPException(status_code=403, detail="Only admins can remove members")
 
-    # 2. Cannot remove yourself (use leave group instead)
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot remove yourself")
 
-    # 3. Find the member
     member_to_remove = db.query(GroupMember).filter(
         GroupMember.group_id == group_id,
         GroupMember.user_id == user_id
@@ -180,6 +190,18 @@ def remove_member(
     if not member_to_remove:
         raise HTTPException(status_code=404, detail="Member not found in group")
 
+    removed_user = db.query(User).filter(User.id == user_id).first()
+    removed_name = removed_user.name if removed_user else "Unknown"
+
     db.delete(member_to_remove)
+    
+    log_activity(
+        db=db,
+        group_id=group_id,
+        actor_id=current_user.id,
+        action="member_removed",
+        payload={"removed_user_id": user_id, "removed_user_name": removed_name}
+    )
+    
     db.commit()
     return {"message": "Member removed successfully"}

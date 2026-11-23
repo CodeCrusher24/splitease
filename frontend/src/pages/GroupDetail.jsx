@@ -177,7 +177,6 @@ export default function GroupDetail() {
   if (error && !group) return <div className="p-8 text-center text-red-500">{error}</div>;
   if (!group) return null;
 
-  // Only the creator can remove members, and they can't remove themselves
   const isCreator = user.id === group.created_by;
   const removableMembers = group.members.filter(m => m.user_id !== group.created_by);
 
@@ -359,7 +358,6 @@ export default function GroupDetail() {
               {activities.map((act) => (
                 <li key={act.id} className="flex gap-3 text-sm border-b pb-2 last:border-0">
                   <div className="w-32 text-gray-500 shrink-0">
-                    {/* TIMEZONE FIX: Append 'Z' to treat as UTC, then toLocale formats to local time */}
                     {new Date(act.created_at + 'Z').toLocaleDateString(undefined, { 
                       day: 'numeric', month: 'short' 
                     })} <br/>
@@ -370,17 +368,40 @@ export default function GroupDetail() {
                     </span>
                   </div>
                   <div>
+                    {/* EXPENSE CREATED */}
                     {act.action === 'expense_created' && (
                       <span>
                         <span className="font-semibold">{getMemberName(act.actor_id)}</span> added an expense: 
                         <span className="italic"> "{act.payload.description}"</span> for ₹{(act.payload.amount_minor / 100).toFixed(2)}
                       </span>
                     )}
+                    {/* SETTLEMENT CREATED */}
                     {act.action === 'settlement_created' && (
                       <span>
                         <span className="font-semibold">{getMemberName(act.actor_id)}</span> paid 
                         <span className="font-semibold"> {getMemberName(act.payload.to_user)}</span> 
                         ₹{(act.payload.amount_minor / 100).toFixed(2)} to settle up.
+                      </span>
+                    )}
+                    {/* GROUP CREATED */}
+                    {act.action === 'group_created' && (
+                      <span>
+                        <span className="font-semibold">{getMemberName(act.actor_id)}</span> created the group 
+                        <span className="italic"> "{act.payload.name}"</span>.
+                      </span>
+                    )}
+                    {/* MEMBER ADDED */}
+                    {act.action === 'member_added' && (
+                      <span>
+                        <span className="font-semibold">{getMemberName(act.actor_id)}</span> added 
+                        <span className="font-semibold"> {act.payload.new_user_name}</span> to the group.
+                      </span>
+                    )}
+                    {/* MEMBER REMOVED */}
+                    {act.action === 'member_removed' && (
+                      <span>
+                        <span className="font-semibold">{getMemberName(act.actor_id)}</span> removed 
+                        <span className="font-semibold"> {act.payload.removed_user_name}</span> from the group.
                       </span>
                     )}
                   </div>

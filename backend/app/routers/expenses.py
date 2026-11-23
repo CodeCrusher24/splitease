@@ -88,3 +88,24 @@ def add_expense(
     db.refresh(expense)
     
     return expense
+@router.get("", response_model=list[ExpenseResponse])
+def list_expenses(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 1. Verify membership
+    member = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id, 
+        GroupMember.user_id == current_user.id
+    ).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+
+    # 2. Fetch expenses (excluding soft-deleted ones)
+    expenses = db.query(Expense).filter(
+        Expense.group_id == group_id,
+        Expense.deleted_at.is_(None)
+    ).order_by(Expense.expense_date.desc(), Expense.created_at.desc()).all()
+    
+    return expenses

@@ -149,3 +149,36 @@ def add_member(
     db.commit()
     
     return {"message": f"Successfully added {new_user.name} to the group"}
+@router.delete("/{group_id}/members/{user_id}")
+def remove_member(
+    group_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 1. Check if current user is admin
+    admin_check = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == current_user.id,
+        GroupMember.role == "admin"
+    ).first()
+    
+    if not admin_check:
+        raise HTTPException(status_code=403, detail="Only admins can remove members")
+
+    # 2. Cannot remove yourself (use leave group instead)
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot remove yourself")
+
+    # 3. Find the member
+    member_to_remove = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == user_id
+    ).first()
+
+    if not member_to_remove:
+        raise HTTPException(status_code=404, detail="Member not found in group")
+
+    db.delete(member_to_remove)
+    db.commit()
+    return {"message": "Member removed successfully"}

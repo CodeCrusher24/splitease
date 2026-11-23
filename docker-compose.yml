@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: splitease
+      POSTGRES_PASSWORD: splitease
+      POSTGRES_DB: splitease
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U splitease"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://splitease:splitease@db:5432/splitease
+      - SECRET_KEY=super-secret-random-key-12345
+      - CORS_ORIGINS=http://localhost:5173
+    depends_on:
+      db:
+        condition: service_healthy # <-- This is the magic line
+
+volumes:
+  pgdata:
